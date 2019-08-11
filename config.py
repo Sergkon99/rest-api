@@ -3,9 +3,9 @@
 dbconfig = {
     'host': 'localhost',
     'port': 3306,
-    'database': 'data',
-    'user': 'root',
-    'password': 'Vahupi89',
+    'database': '',
+    'user': '',
+    'password': '',
     'charset': 'utf8'
 }
 
