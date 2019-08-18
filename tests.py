@@ -69,10 +69,23 @@ class TestRequest(unittest.TestCase):
         self.assertEqual(r.status_code, 201)
         # self.assertEqual(r.json()['data']['import_id'], self.import_id + 1)
 
+    def test_incorrect_import(self):
+        data_list = self.data_list.copy()
+        data_list[0]['citizen_id'] = 1
+        data_list[1]['citizen_id'] = 1
+        data_list[2]['citizen_id'] = 1
+        r = requests.post(self.SITE + '/imports',
+                          json={'citizens': data_list})
+        self.assertEqual(r.status_code, 400)
+
+    def test_incorrect_get(self):
+        q = self.SITE + '/imports/{id}/citizens'.format(id=10**5)
+        r = requests.get(q)
+        self.assertEqual(r.status_code, 400)
+
     def test_correct_get(self):
         self.assertIsNotNone(self.import_id)
-        q = self.SITE + '/imports/{id}/citizens'.format(id=str(self.import_id))
-        print(q)
+        q = self.SITE + '/imports/{id}/citizens'.format(id=self.import_id)
         r = requests.get(q)
         self.assertEqual(r.status_code, 200)
         r = r.json()
