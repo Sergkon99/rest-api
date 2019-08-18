@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from logger import LogMsg
 import datetime as dt
 import re

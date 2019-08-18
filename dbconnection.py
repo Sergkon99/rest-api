@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import mysql.connector
 from logger import LogMsg
 

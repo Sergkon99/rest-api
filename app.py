@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from flask import Flask, jsonify, request, make_response, abort
 from flask import render_template, json
 from functools import wraps
@@ -124,7 +125,7 @@ def import_data():
 
 @app.route('/imports/<int:import_id>/citizens', methods=['GET'])
 def get_data(import_id, citizen_id=None):
-    LogMsg('[Method get_data] start')
+    LogMsg('[Method get_data] start whit import_id = ' + str(import_id))
     if import_id > config.import_id:
         LogMsg('Некорректный import_id: ' + str(import_id))
         abort(400)
@@ -164,7 +165,9 @@ def get_data(import_id, citizen_id=None):
                     'apartment': citizen[5],
                     'birth_date': citizen[6].strftime('%d.%m.%Y'),
                     'gender': citizen[7],
-                    'relatives': [int(i) for i in citizen[8].split(';')]
+                    'relatives': [int(i)
+                                  for i in citizen[8].strip().split(';')
+                                  if i]
                 })
         success = True
     except DBConnectionError as err:
