@@ -244,6 +244,42 @@ def update(import_id, citizen_id):
     return jsonify(res['data'][0])
 
 
+def update_relatives(citizen, cur_relatives: list, new_relatives: list):
+    def add_relative(citizen, relative):
+        query_select = """
+            SELECT
+                `relatives`
+            FROM
+                `citizens`
+            WHERE
+                `import_id` = {} AND
+                `citizen_id` = {}
+        """
+        query_set = """
+            UPDATE
+                `citizens`
+            SET
+                {set_}
+            WHERE
+                `import_id` = {import_id} AND
+                `citizen_id` = {citizen_id}
+        """
+
+    def del_relative():
+        pass
+
+    # Новые родственники для citizen
+    _new_relatives = []
+    # Родственники для удаления для citizen
+    _del_relatives = []
+    for relative in new_relatives:
+        if relative not in cur_relatives:
+            _new_relatives.append(relative)
+    for relative in cur_relatives:
+        if relative not in new_relatives:
+            _del_relatives.append(relative)
+
+
 if __name__ == '__main__':
     # Выполняется дважды из-за дебаг мода
     LogMsg('Приложение запущенно')
