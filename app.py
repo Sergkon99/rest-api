@@ -65,18 +65,7 @@ def import_data():
                     `relatives`,
                     `import_id`
                 )
-                VALUES(
-                    {citizen_id},
-                    "{town}",
-                    "{street}",
-                    "{building}",
-                    "{name}",
-                    {apartment},
-                    "{birth_date}",
-                    "{gender}",
-                    "{relatives}",
-                    "{import_id}"
-                )
+                VALUES( %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
             relatives = {}
             for citizen in request.json['citizens']:
@@ -92,18 +81,19 @@ def import_data():
                     LogMsg('Два человека с однаковыми id')
                     abort(400)
 
-                cur_query = query.format(
-                    citizen_id=citizen['citizen_id'],
-                    town=citizen['town'],
-                    street=citizen['street'],
-                    building=citizen['building'],
-                    name=citizen['name'],
-                    apartment=citizen['apartment'],
-                    birth_date=_birth_date,
-                    gender=citizen['gender'],
-                    relatives=';'.join(map(str, citizen['relatives'])),
-                    import_id=config.import_id)
-                cursor.execute(cur_query)
+                args = (
+                    citizen['citizen_id'],
+                    citizen['town'],
+                    citizen['street'],
+                    citizen['building'],
+                    itizen['name'],
+                    citizen['apartment'],
+                    _birth_date,
+                    citizen['gender'],
+                    ';'.join(map(str, citizen['relatives'])),
+                    config.import_id
+                    )
+                cursor.execute(cur_query, args)
         success = True
     except DBConnectionError as err:
         LogMsg('Ошибка подключения к базе данных ' + str(err))
@@ -148,12 +138,16 @@ def get_data(import_id, citizen_id=None):
                 FROM
                     `citizens`
                 WHERE
-                    `import_id` = {_import_id}
-                    {_citizen_id}
-            """.format(_import_id=import_id,
-                       _citizen_id=f"AND `citizen_id` = {citizen_id}"
-                       if citizen_id else "")
-            cursor.execute(query)
+                    `import_id` = %s
+                    {where}
+            """
+            if citizen_id:
+                query = query.format(where="AND `citizen_id` = %s")
+                args = (import_id, citizen_id)
+            else:
+                query = query.format(where="")
+                args = (import_id, )
+            cursor.execute(query ,args)
 
             for citizen in cursor.fetchall():
                 citizens.append({
@@ -207,22 +201,28 @@ def update(import_id, citizen_id):
     try:
         with DBConnection(config.dbconfig) as cursor:  # TODO нужны изменения!
             set_ = ""
+            args = []
             for field in data:
                 if field in ('town', 'street', 'building', 'name',
-                             'gender', 'relatives', 'apartment'):
-                    set_ += f' `{field}` = "{data[field]}" ,'
+                             'gender', 'apartment'):
+                    set_ += ' `{field}` = %s ,'.format(field=field)
+                    args.append(data[field])
             if new_birth_date:
-                set_ += f' `birth_date` = "{new_birth_date}",'
-            set_ = set_[0:-1]  # удаляем последнюю запятую
-            query = f"""
-                UPDATE `citizens`
-                SET
-                    {set_}
-                WHERE
-                    `import_id` = {import_id} AND
-                    `citizen_id` = {citizen_id}
-            """
-            cursor.execute(query)
+                set_ += ' `birth_date` = %s,'
+                args.append(new_birth_date)
+            if set_:
+                set_ = set_[0:-1]  # удаляем последнюю запятую
+                query = """
+                    UPDATE `citizens`
+                    SET
+                        {set_}
+                    WHERE
+                        `import_id` = %s AND
+                        `citizen_id` = %s
+                """.format(set_=set_)
+                args.append(import_id)
+                args.append(citizen_id)
+                cursor.execute(query, args)
         success = True
     except DBConnectionError as err:
         LogMsg('Ошибка подключения к базе данных ' + str(err))
