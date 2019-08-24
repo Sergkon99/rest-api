@@ -8,6 +8,7 @@ from dbconnection import DBConnection, DBConnectionError,\
                          CredentialsError, SQLError
 from logger import LogMsg
 from checker import *
+from sqlquery import *
 
 app = Flask(__name__)
 # TODO Подумать на переход на f-строки в запрсах к БД
@@ -65,18 +66,7 @@ def import_data():
                     `relatives`,
                     `import_id`
                 )
-                VALUES(
-                    {citizen_id},
-                    "{town}",
-                    "{street}",
-                    "{building}",
-                    "{name}",
-                    {apartment},
-                    "{birth_date}",
-                    "{gender}",
-                    "{relatives}",
-                    "{import_id}"
-                )
+                VALUES(%s, %s ,%s, %s, %s, %s, %s, %s, %s, %s)
             """
             relatives = {}
             for citizen in request.json['citizens']:
@@ -92,18 +82,20 @@ def import_data():
                     LogMsg('Два человека с однаковыми id')
                     abort(400)
 
-                cur_query = query.format(
-                    citizen_id=citizen['citizen_id'],
-                    town=citizen['town'],
-                    street=citizen['street'],
-                    building=citizen['building'],
-                    name=citizen['name'],
-                    apartment=citizen['apartment'],
-                    birth_date=_birth_date,
-                    gender=citizen['gender'],
-                    relatives=';'.join(map(str, citizen['relatives'])),
-                    import_id=config.import_id)
-                cursor.execute(cur_query)
+                args = (
+                    citizen['citizen_id'],
+                    citizen['town'],
+                    citizen['street'],
+                    citizen['building'],
+                    citizen['name'],
+                    citizen['apartment'],
+                    _birth_date,
+                    citizen['gender'],
+                    ';'.join(map(str, citizen['relatives'])),
+                    config.import_id
+                    )
+                LogMsg(args)
+                cursor.execute(query, args)
         success = True
     except DBConnectionError as err:
         LogMsg('Ошибка подключения к базе данных ' + str(err))
@@ -148,14 +140,19 @@ def get_data(import_id, citizen_id=None):
                 FROM
                     `citizens`
                 WHERE
-                    `import_id` = {_import_id}
-                    {_citizen_id}
-            """.format(_import_id=import_id,
-                       _citizen_id=f"AND `citizen_id` = {citizen_id}"
-                       if citizen_id else "")
-            cursor.execute(query)
+                    `import_id` = %s
+                    {where}
+            """
+            if citizen_id:
+                query = query.format(where="AND `citizen_id` = %s")
+                args = (import_id, citizen_id)
+            else:
+                query = query.format(where="")
+                args = (import_id, )
+            cursor.execute(query, args)
 
             for citizen in cursor.fetchall():
+                LogMsg(citizen)
                 citizens.append({
                     'citizen_id': citizen[0],
                     'town': citizen[1],
@@ -189,6 +186,9 @@ def get_data(import_id, citizen_id=None):
 @app.route('/imports/<int:import_id>/citizens/<int:citizen_id>',
            methods=['PATCH'])
 def update(import_id, citizen_id):
+    if import_id > config.import_id:
+        LogMsg("Некоректный import id")
+        abort(400)
     LogMsg('[Method update] start')
     if not request.json:
         LogMsg('Ошибка в запросе: запрос пуст')
@@ -203,38 +203,38 @@ def update(import_id, citizen_id):
         new_birth_date = parse_date(data['birth_date'])
         if not new_birth_date:
             abort(400)
-    success = False
-    try:
-        with DBConnection(config.dbconfig) as cursor:  # TODO нужны изменения!
-            set_ = ""
-            for field in data:
-                if field in ('town', 'street', 'building', 'name',
-                             'gender', 'relatives', 'apartment'):
-                    set_ += f' `{field}` = "{data[field]}" ,'
-            if new_birth_date:
-                set_ += f' `birth_date` = "{new_birth_date}",'
-            set_ = set_[0:-1]  # удаляем последнюю запятую
-            query = f"""
-                UPDATE `citizens`
-                SET
-                    {set_}
-                WHERE
-                    `import_id` = {import_id} AND
-                    `citizen_id` = {citizen_id}
-            """
-            cursor.execute(query)
-        success = True
-    except DBConnectionError as err:
-        LogMsg('Ошибка подключения к базе данных ' + str(err))
-    except CredentialsError as err:
-        LogMsg('Неверные имя/пароль ' + str(err))
-    except SQLError as err:
-        LogMsg('Ошибка SQL запроса ' + str(err))
-    except Exception as err:
-        LogMsg('Неизвестная ошибка ' + str(err))
-    finally:
-        if not success:
+    set_ = ""
+    args = []
+    for field in data:
+        if field in ('town', 'street', 'building', 'name',
+                        'gender', 'apartment'):
+            set_ += ' `{field}` = %s ,'.format(field=field)
+            args.append(data[field])
+    if new_birth_date:
+        set_ += ' `birth_date` = %s,'
+        args.append(new_birth_date)
+    if set_.strip():
+        LogMsg(set_)
+        set_ = set_[0:-1]  # удаляем последнюю запятую
+        query = """
+            UPDATE `citizens`
+            SET
+                {set_}
+            WHERE
+                `import_id` = %s AND
+                `citizen_id` = %s
+        """.format(set_=set_)
+        args.append(import_id)
+        args.append(citizen_id)
+        res = SqlQueryScalar(query, *args)
+        if res is None:
+            LogMsg("res is None 231")
             abort(400)
+    if 'relatives' in data:
+        # _get_relatives(import_id, citizen_id)
+        LogMsg("relatives start")
+        update_relatives(citizen_id, import_id, data['relatives'])
+        LogMsg("relatives end")
     res = get_data(import_id, citizen_id)
     # Достаем тело ответа
     res = res.json
@@ -244,40 +244,134 @@ def update(import_id, citizen_id):
     return jsonify(res['data'][0])
 
 
-def update_relatives(citizen, cur_relatives: list, new_relatives: list):
-    def add_relative(citizen, relative):
+def _get_relatives(import_id, citizen_id):
+    LogMsg("get realtives")
+    query = """
+        SELECT
+            `relatives`
+        FROM
+            `citizens`
+        WHERE
+            `import_id` = %s AND
+            `citizen_id` = %s
+    """
+    relatives = SqlQueryScalar(query, import_id, citizen_id)
+    if relatives is None:
+        abort(400)
+    relatives = [int(i) for i in relatives.split(';') if i]
+    LogMsg(relatives)
+
+
+def update_relatives(citizen_id, import_id, new_relatives: list):
+    # добавить/удалить родственника relative у жителя citizen
+    def change_relative(citizen, import_id, relative, add=True):
+        LogMsg("change_relative")
         query_select = """
             SELECT
                 `relatives`
             FROM
                 `citizens`
             WHERE
-                `import_id` = {} AND
-                `citizen_id` = {}
+                `import_id` = %s AND
+                `citizen_id` = %s
         """
         query_set = """
             UPDATE
                 `citizens`
             SET
-                {set_}
+                `relatives` = %s
             WHERE
-                `import_id` = {import_id} AND
-                `citizen_id` = {citizen_id}
+                `import_id` = %s AND
+                `citizen_id` = %s
         """
+        relatives = _get_relatives(import_id, citizen)
+        if relatives is None:
+            abort(400)
+        if add:
+            if relative in relatives:
+                LogMsg("Родственник с ид {} уже есть у {}".format(relative, citizen))
+                abort(400)
+            relatives.append(relative)
+        else:
+            if relative not in relatives:
+                LogMsg("Родственник с ид {} нет у {}".format(relative, citizen))
+                abort(400)
+            relatives.remove(relative)
+        relatives = ';'.join(map(str, relatives))
+        res = SqlQueryScalar(query_set, relatives, import_id, citizen_id)
+        if res is None:
+            abort(400)
+        LogMsg("change_relative end")
 
-    def del_relative():
-        pass
+    def add_relative(import_id, citizen, relative):
+        LogMsg("Добавление родственника")
+        change_relative(citizen, import_id, relative, add=True)
 
-    # Новые родственники для citizen
-    _new_relatives = []
-    # Родственники для удаления для citizen
-    _del_relatives = []
+    def del_relative(import_id, citizen, relative):
+        LogMsg("Удаление из родственников")
+        change_relative(citizen, import_id, relative, add=False)
+
+    if citizen_id in new_relatives:
+        LogMsg("Родственник сам себе")
+        abort(400)
+    LogMsg("Запущен метод обновления родственников")
+    citizen_ids = []
+    query = """
+        SELECT
+            `citizen_id`
+        FROM
+            `citizens`
+        WHERE
+            `import_id` = %s
+        """
+    res = SqlQuery(query, import_id)
+    if res is None:
+        abort(400)
+    for id_ in res:
+        citizen_ids.append(id_[0])
     for relative in new_relatives:
+        if relative not in citizen_ids:
+            LogMsg("Некоректные id " + str(relative))
+            abort(400)
+    LogMsg(citizen_ids)
+    query_select = """
+        SELECT
+            `relatives`
+        FROM
+            `citizens`
+        WHERE
+            `import_id` = %s AND
+            `citizen_id` = %s
+        """
+    cur_relatives = SqlQueryScalar(query_select, import_id, citizen_id)
+    LogMsg(cur_relatives)
+    if cur_relatives is None:
+        abort(400)
+    cur_relatives = [int(i) for i in cur_relatives.split(';') if i]
+    query_set = """
+        UPDATE
+            `citizens`
+        SET
+            `relatives` = %s
+        WHERE
+            `import_id` = %s AND
+            `citizen_id` = %s
+        """
+    res = SqlQueryScalar(query_set, ';'.join(map(str, new_relatives)), import_id, citizen_id)
+    if res is None:
+        abort(400)
+    LogMsg(cur_relatives)
+    LogMsg(new_relatives)
+    for relative in new_relatives:
+        LogMsg("Итерация 1")
         if relative not in cur_relatives:
-            _new_relatives.append(relative)
+            add_relative(import_id, relative, citizen_id)
+            # _new_relatives.append(relative)
     for relative in cur_relatives:
+        LogMsg("Итерация 1")
         if relative not in new_relatives:
-            _del_relatives.append(relative)
+            del_relative(import_id, relative, citizen_id)
+            # _del_relatives.append(relative)
 
 
 if __name__ == '__main__':
