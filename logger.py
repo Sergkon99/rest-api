@@ -2,9 +2,12 @@
 from datetime import datetime
 
 
-def LogMsg(msg, console=False):
+def LogMsg(*args, console=False):
     with open('app.log', 'a', encoding='utf-8') as log:
-            log.write(f'[log {datetime.now()}]: ' + str(msg) + '\n')
+        s = ""
+        for arg in args:
+            s += str(arg) + " "
+        log.write(f'[log {datetime.now()}]: ' + s + '\n')
     if console:
         print(msg)
 
