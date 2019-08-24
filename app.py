@@ -326,6 +326,41 @@ def del_relative(import_id, citizen_id, relative):
 
 
 def update_relatives(import_id, citizen_id, new_relatives: list):
+    if citizen_id in new_relatives:
+        LogMsg("Родственник сам себе")
+        abort(400)
+    query = """
+        SELECT
+            `citizen_id`
+        FROM
+            `citizens`
+        WHERE
+            `import_id` = %s
+    """
+    citizen_ids = []
+    success = False  # Признак успешности запроса
+    try:
+        with DBConnection(config.dbconfig) as cursor:
+            cursor.execute(query, (import_id, ))
+            res = cursor.fetchall()
+        success = True
+    except DBConnectionError as err:
+        LogMsg('Ошибка подключения к базе данных ' + str(err))
+    except CredentialsError as err:
+        LogMsg('Неверные имя/пароль ' + str(err))
+    except SQLError as err:
+        LogMsg('Ошибка SQL запроса ' + str(err))
+    except Exception as err:
+        LogMsg('Неизвестная ошибка ' + str(err))
+    finally:
+        if not success:
+            abort(400)
+    for id_ in res:
+        citizen_ids.append(id_[0])
+    for relative in new_relatives:
+        if relative not in citizen_ids:
+            LogMsg("Некоректный ид родственника", relative)
+            abort(400)
     query_select = """
         SELECT
             `relatives`
