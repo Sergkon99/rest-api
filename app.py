@@ -356,17 +356,11 @@ def update_relatives(import_id, citizen_id, new_relatives: list):
 
     cur_relatives = [int(i) for i in res.split(';') if i]
     LogMsg("update_relatives", cur_relatives)
-    # Новые родственники для citizen
-    _new_relatives = []
-    # Родственники для удаления для citizen
-    _del_relatives = []
     for relative in new_relatives:
         if relative not in cur_relatives:
-            _new_relatives.append(relative)
             add_relative(import_id, relative, citizen_id)
     for relative in cur_relatives:
         if relative not in new_relatives:
-            _del_relatives.append(relative)
             del_relative(import_id, relative, citizen_id)
 
     new_relatives = ';'.join(map(str, new_relatives))
