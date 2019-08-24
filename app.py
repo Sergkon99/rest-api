@@ -86,14 +86,14 @@ def import_data():
                     citizen['town'],
                     citizen['street'],
                     citizen['building'],
-                    itizen['name'],
+                    citizen['name'],
                     citizen['apartment'],
                     _birth_date,
                     citizen['gender'],
                     ';'.join(map(str, citizen['relatives'])),
                     config.import_id
                     )
-                cursor.execute(cur_query, args)
+                cursor.execute(query, args)
         success = True
     except DBConnectionError as err:
         LogMsg('Ошибка подключения к базе данных ' + str(err))
@@ -147,7 +147,7 @@ def get_data(import_id, citizen_id=None):
             else:
                 query = query.format(where="")
                 args = (import_id, )
-            cursor.execute(query ,args)
+            cursor.execute(query, args)
 
             for citizen in cursor.fetchall():
                 citizens.append({
