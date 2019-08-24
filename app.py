@@ -11,6 +11,7 @@ from checker import *
 
 app = Flask(__name__)
 # TODO Подумать на переход на f-строки в запрсах к БД
+# TODO переписать список родственников на сет
 
 
 def init():
@@ -235,6 +236,9 @@ def update(import_id, citizen_id):
     finally:
         if not success:
             abort(400)
+    if 'relatives' in data:
+        update_relatives(import_id, citizen_id, data['relatives'])
+    #del_relative(import_id, citizen_id, 23)
     res = get_data(import_id, citizen_id)
     # Достаем тело ответа
     res = res.json
@@ -244,30 +248,114 @@ def update(import_id, citizen_id):
     return jsonify(res['data'][0])
 
 
-def update_relatives(citizen, cur_relatives: list, new_relatives: list):
-    def add_relative(citizen, relative):
-        query_select = """
-            SELECT
-                `relatives`
-            FROM
-                `citizens`
-            WHERE
-                `import_id` = {} AND
-                `citizen_id` = {}
-        """
-        query_set = """
-            UPDATE
-                `citizens`
-            SET
-                {set_}
-            WHERE
-                `import_id` = {import_id} AND
-                `citizen_id` = {citizen_id}
-        """
+def change_relative(import_id, citizen_id, relative, add=True):
+    """Добавит/Удалит родственника с ид relative к citizen_id"""
+    query_select = """
+        SELECT
+            `relatives`
+        FROM
+            `citizens`
+        WHERE
+            `import_id` = %s AND
+            `citizen_id` = %s
+    """
+    query_set = """
+        UPDATE
+            `citizens`
+        SET
+            `relatives` = %s
+        WHERE
+            `import_id` = %s AND
+            `citizen_id` = %s
+    """
+    cur_relatives = []  # Список родственников у citizen_id
+    success = False  # Признак успешности запроса
+    try:
+        with DBConnection(config.dbconfig) as cursor:
+            cursor.execute(query_select, (import_id, citizen_id))
+            res = cursor.fetchone()[0]
+        success = True
+    except DBConnectionError as err:
+        LogMsg('Ошибка подключения к базе данных ' + str(err))
+    except CredentialsError as err:
+        LogMsg('Неверные имя/пароль ' + str(err))
+    except SQLError as err:
+        LogMsg('Ошибка SQL запроса ' + str(err))
+    except Exception as err:
+        LogMsg('Неизвестная ошибка ' + str(err))
+    finally:
+        if not success:
+            abort(400)
 
-    def del_relative():
-        pass
+    cur_relatives = [int(i) for i in res.split(';') if i]
+    LogMsg("cur relatives", cur_relatives)
+    # TODO проверка если родственник уже есть/нет
+    if add:
+        if relative not in cur_relatives:
+            cur_relatives.append(relative)
+    else:
+        if relative in cur_relatives:
+            cur_relatives.remove(relative)
+    new_relatives = ';'.join(map(str, cur_relatives))
 
+    try:
+        with DBConnection(config.dbconfig) as cursor:
+            cursor.execute(query_set, (new_relatives, import_id, citizen_id))
+        success = True
+    except DBConnectionError as err:
+        LogMsg('Ошибка подключения к базе данных ' + str(err))
+    except CredentialsError as err:
+        LogMsg('Неверные имя/пароль ' + str(err))
+    except SQLError as err:
+        LogMsg('Ошибка SQL запроса ' + str(err))
+    except Exception as err:
+        LogMsg('Неизвестная ошибка ' + str(err))
+    finally:
+        if not success:
+            abort(400)
+
+
+def add_relative(import_id, citizen_id, relative):
+    """Добавит родственника с ид relative к citizen_id"""
+    change_relative(import_id, citizen_id, relative)
+
+
+def del_relative(import_id, citizen_id, relative):
+    """Удалит родственника с ид relative у citizen_id"""
+    change_relative(import_id, citizen_id, relative, add=False)
+
+
+def update_relatives(import_id, citizen_id, new_relatives: list):
+    query_select = """
+        SELECT
+            `relatives`
+        FROM
+            `citizens`
+        WHERE
+            `import_id` = %s AND
+            `citizen_id` = %s
+    """
+    cur_relatives = []  # Список родственников у citizen_id
+    success = False  # Признак успешности запроса
+    try:
+        with DBConnection(config.dbconfig) as cursor:
+            cursor.execute(query_select, (import_id, citizen_id))
+            res = cursor.fetchone()[0]
+        success = True
+    except DBConnectionError as err:
+        LogMsg('Ошибка подключения к базе данных ' + str(err))
+    except CredentialsError as err:
+        LogMsg('Неверные имя/пароль ' + str(err))
+    except SQLError as err:
+        LogMsg('Ошибка SQL запроса ' + str(err))
+    except Exception as err:
+        LogMsg('Неизвестная ошибка ' + str(err))
+    finally:
+        if not success:
+            abort(400)
+
+    cur_relatives = [int(i) for i in res.split(';') if i]
+    LogMsg("update_relatives", cur_relatives)
     # Новые родственники для citizen
     _new_relatives = []
     # Родственники для удаления для citizen
@@ -275,9 +363,37 @@ def update_relatives(citizen, cur_relatives: list, new_relatives: list):
     for relative in new_relatives:
         if relative not in cur_relatives:
             _new_relatives.append(relative)
+            add_relative(import_id, relative, citizen_id)
     for relative in cur_relatives:
         if relative not in new_relatives:
             _del_relatives.append(relative)
+            del_relative(import_id, relative, citizen_id)
+
+    new_relatives = ';'.join(map(str, new_relatives))
+    query_set = """
+        UPDATE
+            `citizens`
+        SET
+            `relatives` = %s
+        WHERE
+            `import_id` = %s AND
+            `citizen_id` = %s
+    """
+    try:
+        with DBConnection(config.dbconfig) as cursor:
+            cursor.execute(query_set, (new_relatives, import_id, citizen_id))
+        success = True
+    except DBConnectionError as err:
+        LogMsg('Ошибка подключения к базе данных ' + str(err))
+    except CredentialsError as err:
+        LogMsg('Неверные имя/пароль ' + str(err))
+    except SQLError as err:
+        LogMsg('Ошибка SQL запроса ' + str(err))
+    except Exception as err:
+        LogMsg('Неизвестная ошибка ' + str(err))
+    finally:
+        if not success:
+            abort(400)
 
 
 if __name__ == '__main__':
