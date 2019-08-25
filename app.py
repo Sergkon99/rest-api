@@ -472,7 +472,8 @@ def birthdays(import_id):
     return jsonify({'data': _data}), 200
 
 
-@app.route('/imports/<int:import_id>/towns/stat/percentile/age', methods=['GET'])
+@app.route('/imports/<int:import_id>/towns/stat/percentile/age',
+           methods=['GET'])
 def age(import_id):
     LogMsg('[age] start')
     if import_id > config.import_id:
