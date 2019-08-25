@@ -3,11 +3,12 @@ from datetime import datetime
 
 
 def LogMsg(*args, console=False):
+    msg = ""
+    for arg in args:
+            msg += str(arg) + " "
+    msg = msg[:-1]
     with open('app.log', 'a', encoding='utf-8') as log:
-        s = ""
-        for arg in args:
-            s += str(arg) + " "
-        log.write(f'[log {datetime.now()}]: ' + s + '\n')
+        log.write(f'[log {datetime.now()}]: ' + msg + '\n')
     if console:
         print(msg)
 
