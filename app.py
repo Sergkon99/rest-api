@@ -3,6 +3,8 @@ from flask import Flask, jsonify, request, make_response, abort
 from flask import render_template, json
 from functools import wraps
 from datetime import date
+from dateutil.relativedelta import relativedelta
+import math
 
 import config
 from dbconnection import DBConnection, DBConnectionError,\
@@ -450,6 +452,7 @@ def birthdays(import_id):
             res_data[rel_birth_month].setdefault(citizen_id, 0)
             res_data[rel_birth_month][citizen_id] += 1
     LogMsg(res_data)
+    # Сформируем данные для ответа
     for i in range(1, 13):
         tmp = []
         for citizen_id, presents in res_data[i].items():
@@ -459,6 +462,35 @@ def birthdays(import_id):
     LogMsg(_data)
     return jsonify({'data': _data}), 200
 
+
+@app.route('/imports/<int:import_id>/towns/stat/percentile/age', methods=['GET'])
+def age(import_id):
+    if import_id > config.import_id:
+        LogMsg('import_id', import_id)
+        abort(400)
+    res = get_data(import_id)
+    citizens = res.json['data']
+    towns = {}
+    for citizen in citizens:
+        town = citizen['town'].strip()
+        towns.setdefault(town, [])
+        age = relativedelta(date.today(), parse_date(citizen['birth_date']))
+        towns[town].append(age.years)
+    _data = []
+    for town, ages in towns.items():
+        l = len(ages)
+        p50 = math.floor(len([i for i in ages if i < 50]) / l * 100)
+        p75 = math.floor(len([i for i in ages if i < 75]) / l * 100)
+        p99 = math.floor(len([i for i in ages if i < 99]) / l * 100)
+        tmp = {
+            'town': town,
+            'p50': p50,
+            'p75': p75,
+            'p99': p99
+        }
+        _data.append(tmp)
+    LogMsg(towns)
+    return jsonify({'data': _data})
 
 if __name__ == '__main__':
     # Выполняется дважды из-за дебаг мода
