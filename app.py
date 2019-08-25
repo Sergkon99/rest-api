@@ -2,6 +2,7 @@
 from flask import Flask, jsonify, request, make_response, abort
 from flask import render_template, json
 from functools import wraps
+from datetime import date
 
 import config
 from dbconnection import DBConnection, DBConnectionError,\
@@ -238,7 +239,6 @@ def update(import_id, citizen_id):
             abort(400)
     if 'relatives' in data:
         update_relatives(import_id, citizen_id, data['relatives'])
-    #del_relative(import_id, citizen_id, 23)
     res = get_data(import_id, citizen_id)
     # Достаем тело ответа
     res = res.json
@@ -423,6 +423,41 @@ def update_relatives(import_id, citizen_id, new_relatives: list):
     finally:
         if not success:
             abort(400)
+
+
+@app.route('/imports/<int:import_id>/citizens/birthdays', methods=['GET'])
+def birthdays(import_id):
+    if import_id > config.import_id:
+        LogMsg('import_id', import_id)
+        abort(400)
+    # Получаем список жителей
+    res = get_data(import_id)
+    citizens = res.json['data']
+    citizens = {citizen['citizen_id']: {
+                'birth_date': citizen['birth_date'],
+                'relatives': citizen['relatives']
+                } for citizen in citizens}
+    LogMsg("Citizens", citizens)
+    res_data = {}
+    _data = {}
+    for i in range(1, 13):
+        res_data[i] = {}
+    for citizen_id, data in citizens.items():
+        for relative in data['relatives']:
+            rel_birth_month = parse_date(citizens[relative]['birth_date'])
+            rel_birth_month = rel_birth_month.month
+            LogMsg(citizen_id, relative, rel_birth_month)
+            res_data[rel_birth_month].setdefault(citizen_id, 0)
+            res_data[rel_birth_month][citizen_id] += 1
+    LogMsg(res_data)
+    for i in range(1, 13):
+        tmp = []
+        for citizen_id, presents in res_data[i].items():
+            tmp.append({'citizen_id': citizen_id,
+                        'presents': presents})
+        _data[str(i)] = tmp
+    LogMsg(_data)
+    return jsonify({'data': _data}), 200
 
 
 if __name__ == '__main__':
