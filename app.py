@@ -185,6 +185,9 @@ def get_data(import_id, citizen_id=None):
            methods=['PATCH'])
 def update(import_id, citizen_id):
     LogMsg('[Method update] start')
+    if import_id > config.import_id:
+        LogMsg('Некорректный import_id: ', import_id)
+        abort(400)
     if not request.json:
         LogMsg('Ошибка в запросе: запрос пуст')
         abort(400)
@@ -244,12 +247,15 @@ def update(import_id, citizen_id):
     LogMsg(res)
     LogMsg('[Method update] end')
     # Возвращаем первое поле из ответа
-    return jsonify(res['data'][0])
+    return jsonify({'data': res['data'][0]})
 
 
 def change_relative(import_id, citizen_id, relative, add=True):
     """Добавит/Удалит родственника с ид relative к citizen_id"""
     LogMsg('[change_relative] start')
+    if import_id > config.import_id:
+        LogMsg('Некорректный import_id: ', import_id)
+        abort(400)
     query_select = """
         SELECT
             `relatives`
@@ -326,6 +332,9 @@ def del_relative(import_id, citizen_id, relative):
 
 
 def update_relatives(import_id, citizen_id, new_relatives: list):
+    if import_id > config.import_id:
+        LogMsg('Некорректный import_id: ', import_id)
+        abort(400)
     LogMsg('[update_relatives] start')
     if citizen_id in new_relatives:
         LogMsg("Родственник сам себе")
