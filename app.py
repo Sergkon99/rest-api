@@ -13,7 +13,6 @@ from logger import LogMsg
 from checker import *
 
 app = Flask(__name__)
-# TODO Подумать на переход на f-строки в запрсах к БД
 # TODO переписать список родственников на сет
 
 
@@ -79,7 +78,6 @@ def import_data():
                 if not _birth_date:
                     abort(400)
                 if not relatives.get(citizen['citizen_id']):
-                    # citizen['relatives'].sort()  # Нужно ли?
                     relatives[citizen['citizen_id']] = citizen['relatives']
                 else:
                     LogMsg('Два человека с однаковыми id')
@@ -110,7 +108,6 @@ def import_data():
     finally:
         if not success:
             abort(400)
-    # LogMsg(relatives)
     if not check_relatives(relatives):
         abort(400)
     LogMsg('[Method import_data] end')
@@ -119,9 +116,9 @@ def import_data():
 
 @app.route('/imports/<int:import_id>/citizens', methods=['GET'])
 def get_data(import_id, citizen_id=None):
-    LogMsg('[Method get_data] start whit import_id = ' + str(import_id))
+    LogMsg('[Method get_data] start whit import_id = ', import_id)
     if import_id > config.import_id:
-        LogMsg('Некорректный import_id: ' + str(import_id))
+        LogMsg('Некорректный import_id: ', import_id)
         abort(400)
 
     citizens = []
@@ -252,6 +249,7 @@ def update(import_id, citizen_id):
 
 def change_relative(import_id, citizen_id, relative, add=True):
     """Добавит/Удалит родственника с ид relative к citizen_id"""
+    LogMsg('[change_relative] start')
     query_select = """
         SELECT
             `relatives`
@@ -291,7 +289,6 @@ def change_relative(import_id, citizen_id, relative, add=True):
 
     cur_relatives = [int(i) for i in res.split(';') if i]
     LogMsg("cur relatives", cur_relatives)
-    # TODO проверка если родственник уже есть/нет
     if add:
         if relative not in cur_relatives:
             cur_relatives.append(relative)
@@ -315,6 +312,7 @@ def change_relative(import_id, citizen_id, relative, add=True):
     finally:
         if not success:
             abort(400)
+    LogMsg('[change_relative] end')
 
 
 def add_relative(import_id, citizen_id, relative):
@@ -328,6 +326,7 @@ def del_relative(import_id, citizen_id, relative):
 
 
 def update_relatives(import_id, citizen_id, new_relatives: list):
+    LogMsg('[update_relatives] start')
     if citizen_id in new_relatives:
         LogMsg("Родственник сам себе")
         abort(400)
@@ -425,10 +424,12 @@ def update_relatives(import_id, citizen_id, new_relatives: list):
     finally:
         if not success:
             abort(400)
+    LogMsg('[update_relatives] end')
 
 
 @app.route('/imports/<int:import_id>/citizens/birthdays', methods=['GET'])
 def birthdays(import_id):
+    LogMsg('[birthdays] start')
     if import_id > config.import_id:
         LogMsg('import_id', import_id)
         abort(400)
@@ -452,19 +453,19 @@ def birthdays(import_id):
             res_data[rel_birth_month].setdefault(citizen_id, 0)
             res_data[rel_birth_month][citizen_id] += 1
     LogMsg(res_data)
-    # Сформируем данные для ответа
     for i in range(1, 13):
         tmp = []
         for citizen_id, presents in res_data[i].items():
             tmp.append({'citizen_id': citizen_id,
                         'presents': presents})
         _data[str(i)] = tmp
-    LogMsg(_data)
+    LogMsg('[birthdays] end')
     return jsonify({'data': _data}), 200
 
 
 @app.route('/imports/<int:import_id>/towns/stat/percentile/age', methods=['GET'])
 def age(import_id):
+    LogMsg('[age] start')
     if import_id > config.import_id:
         LogMsg('import_id', import_id)
         abort(400)
@@ -489,7 +490,7 @@ def age(import_id):
             'p99': p99
         }
         _data.append(tmp)
-    LogMsg(towns)
+    LogMsg('[age] end')
     return jsonify({'data': _data})
 
 if __name__ == '__main__':

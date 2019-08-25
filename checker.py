@@ -34,6 +34,8 @@ def check_fields_for_update(data: dict):
             field_exist = True
             if data[field] is None:
                 return False
+    if not field_exist:
+        LogMsg("Ошибка проаерки полей для обновления")
     return field_exist
 
 
