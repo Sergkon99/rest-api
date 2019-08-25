@@ -13,7 +13,6 @@ from logger import LogMsg
 from checker import *
 
 app = Flask(__name__)
-# TODO переписать список родственников на сет
 
 
 def init():
@@ -504,7 +503,6 @@ def age(import_id):
     return jsonify({'data': _data})
 
 if __name__ == '__main__':
-    # Выполняется дважды из-за дебаг мода
     LogMsg('Приложение запущенно')
     init()
     app.run(debug=True)
