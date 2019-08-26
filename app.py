@@ -15,6 +15,11 @@ from checker import *
 app = Flask(__name__)
 
 
+@app.route('/')
+def index():
+    return 'It is work'
+
+
 def init():
     LogMsg('Начальная инициализация')
     success = False
